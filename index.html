@@ -1434,6 +1434,144 @@
             });
         }
 
+        // Экспорт бита в аудио
+        async function exportBeat() {
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+            loading.textContent = 'Рендеринг аудио...';
+            
+            try {
+                await startAudioContext();
+                
+                // Вычисляем длительность (в секундах) - 4 такта
+                const beatsPerBar = 4;
+                const bars = 4;
+                const duration = (bars * beatsPerBar * 60) / Tone.Transport.bpm.value;
+                
+                // Создаём временные синтезаторы для рендера
+                const renderSynths = tracks.map((track, i) => {
+                    const { synth } = synths[i];
+                    return synth;
+                });
+                
+                // Рендерим паттерн
+                const buffer = await Tone.Offline(async ({ transport }) => {
+                    // Создаём временный loop для рендера
+                    let renderStep = 0;
+                    const stepDuration = (60 / Tone.Transport.bpm.value) / 4; // длительность одного шага
+                    
+                    const renderLoop = new Tone.Loop((time) => {
+                        patterns[currentPattern].forEach((pattern, trackIndex) => {
+                            if (pattern[renderStep]) {
+                                const track = tracks[trackIndex];
+                                const synth = renderSynths[trackIndex];
+                                
+                                if (track.type === '808') {
+                                    synth.triggerAttackRelease(track.sound, '4n', time);
+                                } else if (track.type === 'drum') {
+                                    if (track.name === 'Snare' || track.name === 'Hi-Hat' || track.name === 'Open HH' || 
+                                        track.name === 'Clap' || track.name === 'Crash' || track.name === 'Ride' || 
+                                        track.name === 'Shaker' || track.name === 'Perc') {
+                                        synth.triggerAttackRelease('16n', time);
+                                    } else {
+                                        synth.triggerAttackRelease(track.sound, '8n', time);
+                                    }
+                                } else if (track.type === 'synth' || track.type === 'piano') {
+                                    synth.triggerAttackRelease(track.sound, '8n', time);
+                                } else {
+                                    synth.triggerAttackRelease(track.sound, '8n', time);
+                                }
+                            }
+                        });
+                        
+                        renderStep = (renderStep + 1) % steps;
+                    }, stepDuration);
+                    
+                    renderLoop.start(0);
+                    transport.start();
+                }, duration);
+                
+                // Конвертируем в WAV
+                const wav = bufferToWav(buffer);
+                const blob = new Blob([wav], { type: 'audio/wav' });
+                
+                // Отправляем данные в бота
+                const trackData = {
+                    patterns: patterns,
+                    bpm: Tone.Transport.bpm.value,
+                    steps: steps,
+                    currentPattern: currentPattern,
+                    audio: await blobToBase64(blob),
+                    name: `Beat_${new Date().toISOString().slice(0, 10)}`
+                };
+                
+                tg.sendData(JSON.stringify(trackData));
+                
+                loading.textContent = '✅ Отправлено в бота!';
+                setTimeout(() => {
+                    loading.classList.remove('show');
+                }, 2000);
+                
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (error) {
+                console.error('Export error:', error);
+                loading.textContent = 'Ошибка экспорта';
+                setTimeout(() => {
+                    loading.classList.remove('show');
+                }, 2000);
+                tg.showAlert('❌ Ошибка при экспорте. Попробуйте снова.');
+            }
+        }
+        
+        // Конвертация AudioBuffer в WAV
+        function bufferToWav(buffer) {
+            const length = buffer.length;
+            const arrayBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(arrayBuffer);
+            const samples = buffer.getChannelData(0);
+            
+            // WAV заголовок
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, buffer.sampleRate, true);
+            view.setUint32(28, buffer.sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length * 2, true);
+            
+            // Конвертируем сэмплы
+            let offset = 44;
+            for (let i = 0; i < length; i++) {
+                const sample = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                offset += 2;
+            }
+            
+            return arrayBuffer;
+        }
+        
+        // Конвертация Blob в Base64
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+        
         // Главная кнопка Telegram
         tg.MainButton.setText('💾 Сохранить бит');
         tg.MainButton.onClick(() => {
@@ -1442,6 +1580,14 @@
             tg.HapticFeedback.notificationOccurred('success');
         });
         tg.MainButton.show();
+        
+        // Кнопка экспорта
+        const exportBtn = document.createElement('button');
+        exportBtn.className = 'btn-secondary';
+        exportBtn.id = 'exportBtn';
+        exportBtn.textContent = '📤 Отправить в бота';
+        exportBtn.addEventListener('click', exportBeat);
+        document.querySelector('.controls-row').appendChild(exportBtn);
 
         // Инициализация
         loadSave();

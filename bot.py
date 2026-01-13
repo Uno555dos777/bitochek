@@ -1,7 +1,9 @@
 from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import Application, CommandHandler, ContextTypes, InlineQueryHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, ContextTypes, InlineQueryHandler, CallbackQueryHandler, MessageHandler, filters
 import json
 import os
+import base64
+import io
 from datetime import datetime
 
 # ВСТАВЬ СВОЙ ТОКЕН СЮДА (от BotFather)
@@ -90,24 +92,58 @@ async def play_track(update: Update, context: ContextTypes.DEFAULT_TYPE):
     track = user_tracks[track_index]
     track_name = track.get('name', f'Трек {track_index+1}')
     track_data = track.get('data', {})
+    audio_data = track.get('audio')
     
-    # Здесь должна быть логика воспроизведения трека
-    # Пока просто показываем информацию
     keyboard = [
         [InlineKeyboardButton("🔙 К списку треков", callback_data="my_tracks")],
         [InlineKeyboardButton("🎵 Открыть в редакторе", web_app=WebAppInfo(url=WEBAPP_URL))]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
-        f"🎵 *{track_name}*\n\n"
-        f"BPM: {track_data.get('bpm', 120)}\n"
-        f"Паттерны: {len(track_data.get('patterns', []))}\n"
-        f"Дата создания: {track.get('date', 'Неизвестно')}\n\n"
-        f"⚠️ Воспроизведение треков будет добавлено в следующем обновлении.",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
+    # Если есть аудио, отправляем его
+    if audio_data:
+        try:
+            audio_bytes = base64.b64decode(audio_data)
+            audio_file = io.BytesIO(audio_bytes)
+            audio_file.name = f"{track_name}.wav"
+            
+            await query.message.reply_audio(
+                audio=audio_file,
+                title=track_name,
+                performer="Beat Maker",
+                reply_markup=reply_markup
+            )
+            
+            await query.edit_message_text(
+                f"🎵 *{track_name}*\n\n"
+                f"BPM: {track_data.get('bpm', 120)}\n"
+                f"Паттерны: {len(track_data.get('patterns', []))}\n"
+                f"Дата создания: {track.get('date', 'Неизвестно')}\n\n"
+                f"✅ Аудио отправлено!",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            print(f"Error sending audio: {e}")
+            await query.edit_message_text(
+                f"🎵 *{track_name}*\n\n"
+                f"BPM: {track_data.get('bpm', 120)}\n"
+                f"Паттерны: {len(track_data.get('patterns', []))}\n"
+                f"Дата создания: {track.get('date', 'Неизвестно')}\n\n"
+                f"❌ Ошибка при отправке аудио.",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+    else:
+        await query.edit_message_text(
+            f"🎵 *{track_name}*\n\n"
+            f"BPM: {track_data.get('bpm', 120)}\n"
+            f"Паттерны: {len(track_data.get('patterns', []))}\n"
+            f"Дата создания: {track.get('date', 'Неизвестно')}\n\n"
+            f"⚠️ Аудио не найдено. Экспортируй трек из редактора.",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
 
 async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -127,29 +163,69 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def save_track(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик сохранения трека из WebApp"""
-    # WebApp отправляет данные через callback_data или через сообщение
-    # Здесь нужно обработать сохранение трека
+async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик данных из WebApp"""
     user_id = update.effective_user.id
     
-    if user_id not in tracks_storage:
-        tracks_storage[user_id] = []
-    
-    # В реальном проекте здесь будет парсинг данных из WebApp
-    # Пока заглушка
-    track_data = {
-        'name': f'Трек {len(tracks_storage[user_id]) + 1}',
-        'date': datetime.now().strftime('%d.%m.%Y'),
-        'data': {}
-    }
-    
-    tracks_storage[user_id].append(track_data)
-    
-    await update.message.reply_text(
-        f"✅ Трек сохранён!\n\n"
-        f"Используй /mytracks чтобы посмотреть все треки."
-    )
+    # Данные приходят через update.message.text (JSON строка)
+    if update.message and update.message.text:
+        try:
+            track_data = json.loads(update.message.text)
+            
+            if user_id not in tracks_storage:
+                tracks_storage[user_id] = []
+            
+            # Сохраняем трек
+            track = {
+                'name': track_data.get('name', f'Трек {len(tracks_storage[user_id]) + 1}'),
+                'date': datetime.now().strftime('%d.%m.%Y %H:%M'),
+                'data': {
+                    'patterns': track_data.get('patterns', []),
+                    'bpm': track_data.get('bpm', 120),
+                    'steps': track_data.get('steps', 16),
+                    'currentPattern': track_data.get('currentPattern', 0)
+                },
+                'audio': track_data.get('audio')  # Base64 аудио
+            }
+            
+            tracks_storage[user_id].append(track)
+            
+            keyboard = [
+                [InlineKeyboardButton("🎧 Мои треки", callback_data="my_tracks")],
+                [InlineKeyboardButton("🎵 Создать ещё", web_app=WebAppInfo(url=WEBAPP_URL))]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"✅ *Трек сохранён!*\n\n"
+                f"Название: {track['name']}\n"
+                f"BPM: {track['data']['bpm']}\n"
+                f"Паттерны: {len(track['data']['patterns'])}\n\n"
+                f"Используй кнопку 'Мои треки' чтобы прослушать все треки! 🎵",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            
+            # Если есть аудио, отправляем его сразу
+            if track_data.get('audio'):
+                try:
+                    audio_bytes = base64.b64decode(track_data['audio'])
+                    audio_file = io.BytesIO(audio_bytes)
+                    audio_file.name = f"{track['name']}.wav"
+                    
+                    await update.message.reply_audio(
+                        audio=audio_file,
+                        title=track['name'],
+                        performer="Beat Maker"
+                    )
+                except Exception as e:
+                    print(f"Error sending audio: {e}")
+                    
+        except json.JSONDecodeError:
+            await update.message.reply_text("❌ Ошибка при сохранении трека. Попробуйте снова.")
+        except Exception as e:
+            print(f"Error saving track: {e}")
+            await update.message.reply_text("❌ Произошла ошибка. Попробуйте снова.")
 
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -159,6 +235,9 @@ def main():
     app.add_handler(CallbackQueryHandler(my_tracks, pattern="^my_tracks$"))
     app.add_handler(CallbackQueryHandler(play_track, pattern="^play_track_"))
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="^back_to_start$"))
+    
+    # Обработчик данных из WebApp (приходят как текстовые сообщения с JSON)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_webapp_data))
     
     print("Bot started!")
     app.run_polling()
