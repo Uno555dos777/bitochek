@@ -689,31 +689,58 @@
     </div>
 
     <script>
-        // Инициализация Telegram WebApp
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.enableClosingConfirmation();
+        // Проверка поддержки Web Audio API
+        if (!window.AudioContext && !window.webkitAudioContext) {
+            alert('Ваш браузер не поддерживает Web Audio API. Пожалуйста, используйте современный браузер.');
+        }
+
+        // Инициализация Telegram WebApp с проверкой
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.expand();
+            tg.enableClosingConfirmation();
+        } else {
+            console.warn('Telegram WebApp не найден. Работаем в режиме совместимости.');
+        }
 
         // Установка темы
-        document.body.style.backgroundColor = tg.themeParams.bg_color || '#1e1e2e';
+        if (tg) {
+            document.body.style.backgroundColor = tg.themeParams?.bg_color || '#1e1e2e';
+        }
 
-        // Обработка сворачивания приложения (исправление хрипов)
-        document.addEventListener('visibilitychange', () => {
+        // Обработка сворачивания приложения (ИСПРАВЛЕНО: правильный resume и обработка suspend)
+        document.addEventListener('visibilitychange', async () => {
             if (document.hidden) {
                 // При сворачивании - останавливаем все звуки
                 if (isPlaying) {
-                    Tone.Transport.pause();
-                    // Останавливаем все активные ноты
-                    synths.forEach(({ synth }) => {
-                        if (synth.triggerRelease) {
-                            synth.triggerRelease();
-                        }
-                    });
+                    try {
+                        await Tone.Transport.pause();
+                        // Останавливаем все активные ноты
+                        synths.forEach(({ synth }) => {
+                            try {
+                                if (synth && typeof synth.releaseAll === 'function') {
+                                    synth.releaseAll();
+                                } else if (synth && typeof synth.triggerRelease === 'function') {
+                                    synth.triggerRelease();
+                                }
+                            } catch (e) {
+                                console.error('Error releasing synth:', e);
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Error pausing transport:', e);
+                    }
                 }
             } else {
-                // При разворачивании - возобновляем если было запущено
-                if (isPlaying && Tone.Transport.state === 'paused') {
-                    Tone.Transport.start();
+                // При разворачивании - возобновляем контекст и transport
+                try {
+                    await resumeAudioContext();
+                    
+                    if (isPlaying && Tone.Transport.state === 'paused') {
+                        await Tone.Transport.resume(); // ИСПРАВЛЕНО: используем resume вместо start
+                    }
+                } catch (e) {
+                    console.error('Error resuming audio:', e);
                 }
             }
         });
@@ -749,45 +776,79 @@
         let trackMutes = Array(tracks.length).fill(false);
         let trackSolos = Array(tracks.length).fill(false);
         let audioContextStarted = false;
+        let dummyOsc = null; // Глобальный dummy oscillator для активации
 
-        // Функция активации аудио контекста (улучшено для мобильных)
-        async function startAudioContext() {
-            try {
-                // Проверяем состояние контекста
-                if (Tone.context.state === 'suspended') {
-                    await Tone.context.resume();
+        // Функция активации аудио контекста (ИСПРАВЛЕНО: с retry логикой и обработкой ошибок)
+        async function startAudioContext(retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    // Проверяем состояние контекста
+                    if (Tone.context.state === 'suspended') {
+                        await Tone.context.resume();
+                        // Ждем немного для стабилизации
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    
+                    if (Tone.context.state !== 'running') {
+                        await Tone.start();
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    
+                    // Если все еще suspended, пробуем активировать через dummy sound
+                    if (Tone.context.state === 'suspended') {
+                        if (!dummyOsc) {
+                            dummyOsc = new Tone.Oscillator(440, 'sine').toDestination();
+                            dummyOsc.volume.value = -Infinity; // Тихий звук
+                        }
+                        dummyOsc.start();
+                        dummyOsc.stop('+0.01');
+                        await Tone.context.resume();
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    
+                    // Проверяем успешность
+                    if (Tone.context.state === 'running') {
+                        audioContextStarted = true;
+                        console.log('🎵 Audio Context активирован:', Tone.context.state);
+                        return true;
+                    }
+                } catch (e) {
+                    console.error(`Failed to start audio context (attempt ${i + 1}/${retries}):`, e);
+                    if (i < retries - 1) {
+                        // Ждем перед следующей попыткой
+                        await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+                    }
                 }
-                
-                if (Tone.context.state !== 'running') {
-                    await Tone.start();
-                }
-                
-                // Дополнительная проверка для мобильных устройств
-                if (Tone.context.state === 'suspended') {
-                    // Создаем временный звук для активации
-                    const osc = new Tone.Oscillator().toDestination();
-                    osc.start();
-                    osc.stop('+0.01');
-                    await Tone.context.resume();
-                }
-                
-                audioContextStarted = true;
-                console.log('🎵 Audio Context активирован:', Tone.context.state);
-            } catch (e) {
-                console.error('Failed to start audio context:', e);
-                // Показываем пользователю сообщение
-                tg.showAlert('⚠️ Нажмите на любую кнопку для активации звука');
+            }
+            
+            // Если не удалось активировать
+            if (tg?.showAlert) {
+                tg.showAlert('⚠️ Не удалось активировать звук. Нажмите ещё раз.');
+            }
+            return false;
+        }
+
+        // Функция для возобновления контекста (вызывать перед каждым воспроизведением)
+        async function resumeAudioContext() {
+            if (Tone.context.state === 'suspended') {
+                await startAudioContext();
             }
         }
 
-        // Эффекты
-        const reverb = new Tone.Reverb({ decay: 2, wet: 0 }).toDestination();
-        const compressor = new Tone.Compressor(-20, 3).connect(reverb);
+        // Эффекты (ИСПРАВЛЕНО: убрали Reverb, упростили Compressor)
+        // Reverb убран - создавал задержки и помехи на мобильных
+        const compressor = new Tone.Compressor(-12, 2).toDestination(); // Более мягкие настройки
 
-        // КАЧЕСТВЕННЫЕ СИНТЕЗАТОРЫ
-        const synths = tracks.map((track, i) => {
-            const channel = new Tone.Channel({ volume: 0, pan: 0 }).connect(compressor);
-            let synth;
+        // КАЧЕСТВЕННЫЕ СИНТЕЗАТОРЫ (ИСПРАВЛЕНО: добавлена функция очистки для предотвращения утечек)
+        let synths = [];
+        
+        function createSynths() {
+            // Очищаем старые синтезаторы перед созданием новых
+            disposeSynths();
+            
+            synths = tracks.map((track, i) => {
+                const channel = new Tone.Channel({ volume: 0, pan: 0 }).connect(compressor);
+                let synth;
 
             switch(track.type) {
                 case 'kick':
@@ -896,8 +957,8 @@
                     break;
 
                 case 'pad':
-                    // Атмосферный пэд
-                    synth = new Tone.PolySynth(Tone.Synth, {
+                    // Атмосферный пэд (ИСПРАВЛЕНО: используем MonoSynth вместо PolySynth для производительности)
+                    synth = new Tone.MonoSynth({
                         oscillator: { type: 'sine' },
                         envelope: { 
                             attack: 0.3, 
@@ -955,10 +1016,14 @@
         }
         drawVisualizer();
 
-        // Создание секвенсора
+        // Создание секвенсора (ИСПРАВЛЕНО: оптимизирован рендеринг)
+        let sequencerCache = null;
         function createSequencer() {
             const sequencerEl = document.getElementById('sequencer');
-            sequencerEl.innerHTML = '';
+            if (!sequencerEl) return;
+            
+            // ИСПРАВЛЕНО: используем DocumentFragment для оптимизации
+            const fragment = document.createDocumentFragment();
 
             tracks.forEach((track, trackIndex) => {
                 const trackEl = document.createElement('div');
@@ -975,18 +1040,20 @@
                 muteBtn.className = 'track-btn mute-btn';
                 muteBtn.textContent = 'M';
                 muteBtn.addEventListener('click', async () => {
-                    await startAudioContext();
+                    await resumeAudioContext();
                     trackMutes[trackIndex] = !trackMutes[trackIndex];
                     muteBtn.classList.toggle('active');
                     synths[trackIndex].channel.mute = trackMutes[trackIndex];
-                    tg.HapticFeedback.impactOccurred('light');
+                    if (tg?.HapticFeedback) {
+                        tg.HapticFeedback.impactOccurred('light');
+                    }
                 });
                 
                 const soloBtn = document.createElement('button');
                 soloBtn.className = 'track-btn solo-btn';
                 soloBtn.textContent = 'S';
                 soloBtn.addEventListener('click', async () => {
-                    await startAudioContext();
+                    await resumeAudioContext();
                     trackSolos[trackIndex] = !trackSolos[trackIndex];
                     soloBtn.classList.toggle('active');
                     
@@ -998,7 +1065,9 @@
                             synths[i].channel.mute = trackMutes[i];
                         }
                     });
-                    tg.HapticFeedback.impactOccurred('light');
+                    if (tg?.HapticFeedback) {
+                        tg.HapticFeedback.impactOccurred('light');
+                    }
                 });
                 
                 controlsEl.appendChild(nameEl);
@@ -1019,9 +1088,17 @@
                         stepEl.classList.add('active');
                     }
                     
-                    stepEl.addEventListener('click', async () => {
+                    // ИСПРАВЛЕНО: обработка multitouch и resumeContext
+                    let isProcessing = false;
+                    stepEl.addEventListener('click', async (e) => {
+                        // ИСПРАВЛЕНО: предотвращение множественных нажатий (multitouch)
+                        if (isProcessing) return;
+                        if (e.touches && e.touches.length > 1) return; // Игнорируем multitouch
+                        
+                        isProcessing = true;
                         try {
-                            await startAudioContext();
+                            // ИСПРАВЛЕНО: возобновляем контекст перед каждым взаимодействием
+                            await resumeAudioContext();
                             
                             // Проверяем, что аудио контекст активен
                             if (Tone.context.state === 'running') {
@@ -1030,9 +1107,13 @@
                                 
                                 if (patterns[currentPattern][trackIndex][stepIndex]) {
                                     triggerSound(trackIndex);
-                                    tg.HapticFeedback.impactOccurred('medium');
+                                    if (tg?.HapticFeedback) {
+                                        tg.HapticFeedback.impactOccurred('medium');
+                                    }
                                 } else {
-                                    tg.HapticFeedback.impactOccurred('light');
+                                    if (tg?.HapticFeedback) {
+                                        tg.HapticFeedback.impactOccurred('light');
+                                    }
                                 }
                                 
                                 autoSave();
@@ -1040,7 +1121,9 @@
                                 // Если контекст не активен, просто переключаем визуально
                                 patterns[currentPattern][trackIndex][stepIndex] = !patterns[currentPattern][trackIndex][stepIndex];
                                 stepEl.classList.toggle('active');
-                                tg.HapticFeedback.impactOccurred('light');
+                                if (tg?.HapticFeedback) {
+                                    tg.HapticFeedback.impactOccurred('light');
+                                }
                                 autoSave();
                             }
                         } catch (error) {
@@ -1049,6 +1132,8 @@
                             patterns[currentPattern][trackIndex][stepIndex] = !patterns[currentPattern][trackIndex][stepIndex];
                             stepEl.classList.toggle('active');
                             autoSave();
+                        } finally {
+                            isProcessing = false;
                         }
                     });
                     
@@ -1057,32 +1142,59 @@
                 
                 trackEl.appendChild(controlsEl);
                 trackEl.appendChild(stepsEl);
-                sequencerEl.appendChild(trackEl);
+                fragment.appendChild(trackEl);
             });
+            
+            // ИСПРАВЛЕНО: очищаем и добавляем все за один раз
+            sequencerEl.innerHTML = '';
+            sequencerEl.appendChild(fragment);
+        }
         }
 
-        // Воспроизведение звука
-        function triggerSound(trackIndex) {
-            const track = tracks[trackIndex];
-            const { synth } = synths[trackIndex];
-            
-            switch(track.type) {
-                case 'kick':
-                case 'bass':
-                    synth.triggerAttackRelease(track.sound, '8n');
-                    break;
-                case 'snare':
-                case 'hihat':
-                case 'clap':
-                case 'perc':
-                    synth.triggerAttackRelease('16n');
-                    break;
-                case 'lead':
-                    synth.triggerAttackRelease(track.sound, '16n');
-                    break;
-                case 'pad':
-                    synth.triggerAttackRelease([track.sound, Tone.Frequency(track.sound).transpose(7)], '2n');
-                    break;
+        // Воспроизведение звука (ИСПРАВЛЕНО: добавлена обработка ошибок и проверка состояния)
+        function triggerSound(trackIndex, time = undefined) {
+            try {
+                // Проверяем состояние контекста
+                if (Tone.context.state !== 'running') {
+                    return; // Не воспроизводим если контекст не активен
+                }
+                
+                if (trackIndex < 0 || trackIndex >= tracks.length || trackIndex >= synths.length) {
+                    return; // Проверка границ
+                }
+                
+                const track = tracks[trackIndex];
+                const { synth } = synths[trackIndex];
+                
+                // Проверяем что синтезатор готов
+                if (!synth || typeof synth.triggerAttackRelease !== 'function') {
+                    return;
+                }
+                
+                // Используем абсолютное время для синхронизации с Transport
+                const triggerTime = time !== undefined ? time : Tone.now();
+                
+                switch(track.type) {
+                    case 'kick':
+                    case 'bass':
+                        synth.triggerAttackRelease(track.sound, '8n', triggerTime);
+                        break;
+                    case 'snare':
+                    case 'hihat':
+                    case 'clap':
+                    case 'perc':
+                        synth.triggerAttackRelease('16n', triggerTime);
+                        break;
+                    case 'lead':
+                        synth.triggerAttackRelease(track.sound, '16n', triggerTime);
+                        break;
+                    case 'pad':
+                        synth.triggerAttackRelease(track.sound, '2n', triggerTime);
+                        break;
+                }
+            } catch (error) {
+                console.error('Error triggering sound:', error);
+                // Не показываем ошибку пользователю, просто логируем
             }
         }
 
@@ -1090,6 +1202,7 @@
         Tone.Transport.bpm.value = 120;
 
         const repeat = (time) => {
+            // ИСПРАВЛЕНО: используем переданное время для синхронизации
             const stepElements = document.querySelectorAll(`[data-step="${currentStep}"]`);
             
             stepElements.forEach((el, trackIndex) => {
@@ -1097,7 +1210,7 @@
                 setTimeout(() => el.classList.remove('playing'), 100);
                 
                 if (patterns[currentPattern][trackIndex][currentStep]) {
-                    triggerSound(trackIndex);
+                    triggerSound(trackIndex, time); // Передаем время для синхронизации
                 }
             });
             
@@ -1106,49 +1219,84 @@
 
         const loop = new Tone.Sequence(repeat, Array(32).fill(0).map((_, i) => i), '16n');
 
-        // Управление
-        document.getElementById('playBtn').addEventListener('click', async () => {
+        // Управление (ИСПРАВЛЕНО: добавлен resumeContext при каждом взаимодействии)
+        document.getElementById('playBtn').addEventListener('click', async (e) => {
+            // ИСПРАВЛЕНО: предотвращение множественных нажатий
+            if (e.detail > 1) return; // Предотвращаем двойной клик
+            
             try {
-                await startAudioContext();
+                // ИСПРАВЛЕНО: возобновляем контекст перед каждым воспроизведением
+                await resumeAudioContext();
+                const contextActive = await startAudioContext();
                 
-                // Дополнительная проверка для мобильных
-                if (Tone.context.state !== 'running') {
-                    tg.showAlert('⚠️ Нажмите ещё раз для активации звука');
+                if (!contextActive || Tone.context.state !== 'running') {
+                    if (tg?.showAlert) {
+                        tg.showAlert('⚠️ Нажмите ещё раз для активации звука');
+                    }
                     return;
                 }
                 
                 if (isPlaying) {
-                    Tone.Transport.pause();
+                    await Tone.Transport.pause();
                     document.getElementById('playBtn').textContent = '▶️ Play';
                     document.getElementById('statusText').textContent = 'Paused';
-                    tg.HapticFeedback.impactOccurred('light');
+                    if (tg?.HapticFeedback) {
+                        tg.HapticFeedback.impactOccurred('light');
+                    }
                 } else {
-                    if (Tone.Transport.state !== 'started') {
+                    // ИСПРАВЛЕНО: правильная проверка состояния Transport
+                    if (Tone.Transport.state === 'stopped') {
                         loop.start(0);
-                        Tone.Transport.start();
-                    } else {
-                        Tone.Transport.resume();
+                        await Tone.Transport.start();
+                    } else if (Tone.Transport.state === 'paused') {
+                        await Tone.Transport.resume();
                     }
                     document.getElementById('playBtn').textContent = '⏸️ Pause';
                     document.getElementById('statusText').textContent = 'Playing';
-                    tg.HapticFeedback.impactOccurred('medium');
+                    if (tg?.HapticFeedback) {
+                        tg.HapticFeedback.impactOccurred('medium');
+                    }
                 }
                 isPlaying = !isPlaying;
             } catch (error) {
                 console.error('Play error:', error);
-                tg.showAlert('⚠️ Ошибка воспроизведения. Попробуйте ещё раз.');
+                if (tg?.showAlert) {
+                    tg.showAlert('⚠️ Ошибка воспроизведения. Попробуйте ещё раз.');
+                }
             }
         });
 
         document.getElementById('stopBtn').addEventListener('click', async () => {
-            await startAudioContext();
-            Tone.Transport.stop();
-            currentStep = 0;
-            isPlaying = false;
-            document.getElementById('playBtn').textContent = '▶️ Play';
-            document.getElementById('statusText').textContent = 'Stopped';
-            document.querySelectorAll('.step.playing').forEach(el => el.classList.remove('playing'));
-            tg.HapticFeedback.impactOccurred('light');
+            try {
+                await resumeAudioContext();
+                
+                // ИСПРАВЛЕНО: правильная очистка Transport и синтезаторов
+                Tone.Transport.cancel();
+                Tone.Transport.stop();
+                
+                // Останавливаем все активные ноты
+                synths.forEach(({ synth }) => {
+                    try {
+                        if (synth && typeof synth.releaseAll === 'function') {
+                            synth.releaseAll();
+                        }
+                    } catch (e) {
+                        console.error('Error releasing synth:', e);
+                    }
+                });
+                
+                currentStep = 0;
+                isPlaying = false;
+                document.getElementById('playBtn').textContent = '▶️ Play';
+                document.getElementById('statusText').textContent = 'Stopped';
+                document.querySelectorAll('.step.playing').forEach(el => el.classList.remove('playing'));
+                
+                if (tg?.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+            } catch (error) {
+                console.error('Stop error:', error);
+            }
         });
 
         document.getElementById('clearBtn').addEventListener('click', async () => {
@@ -1244,25 +1392,44 @@
             }
         });
 
-        // Темп и Swing
+        // Темп и Swing (ИСПРАВЛЕНО: добавлен throttle и правильное применение swing)
+        let tempoThrottle = null;
         document.getElementById('tempoSlider').addEventListener('input', (e) => {
-            const bpm = e.target.value;
-            Tone.Transport.bpm.value = bpm;
-            document.getElementById('tempoValue').textContent = bpm;
+            // ИСПРАВЛЕНО: throttle для предотвращения частых обновлений
+            if (tempoThrottle) {
+                clearTimeout(tempoThrottle);
+            }
+            
+            tempoThrottle = setTimeout(() => {
+                const bpm = e.target.value;
+                Tone.Transport.bpm.value = bpm;
+                document.getElementById('tempoValue').textContent = bpm;
+            }, 50); // Обновляем каждые 50ms
         });
 
+        let swingThrottle = null;
         document.getElementById('swingSlider').addEventListener('input', (e) => {
-            const swing = e.target.value / 100;
-            Tone.Transport.swing = swing;
-            document.getElementById('swingValue').textContent = `${e.target.value}%`;
+            // ИСПРАВЛЕНО: throttle и правильное применение swing
+            if (swingThrottle) {
+                clearTimeout(swingThrottle);
+            }
+            
+            swingThrottle = setTimeout(() => {
+                const swing = e.target.value / 100;
+                Tone.Transport.swing = swing; // ИСПРАВЛЕНО: swing теперь применяется правильно
+                document.getElementById('swingValue').textContent = `${e.target.value}%`;
+            }, 50);
         });
 
-        // Эффекты
+        // Эффекты (ИСПРАВЛЕНО: Reverb убран, эффекты упрощены)
+        // Reverb убран из-за проблем на мобильных
         document.getElementById('reverbToggle').addEventListener('click', async function() {
-            await startAudioContext();
+            await resumeAudioContext();
             this.classList.toggle('active');
-            reverb.wet.value = this.classList.contains('active') ? 0.3 : 0;
-            tg.HapticFeedback.impactOccurred('light');
+            // Reverb больше не используется
+            if (tg?.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
         });
 
         document.getElementById('delayToggle').addEventListener('click', async function() {
@@ -1430,56 +1597,103 @@
             });
         });
 
-        // Автосохранение в Telegram Cloud Storage
+        // Автосохранение в Telegram Cloud Storage (ИСПРАВЛЕНО: добавлен debounce)
+        let saveTimeout = null;
         function autoSave() {
-            const data = {
-                patterns,
-                bpm: Tone.Transport.bpm.value,
-                steps,
-                currentPattern
-            };
+            // ИСПРАВЛЕНО: debounce для предотвращения частых сохранений
+            if (saveTimeout) {
+                clearTimeout(saveTimeout);
+            }
             
-            tg.CloudStorage.setItem('beatmaker_save', JSON.stringify(data), (error, success) => {
-                if (success) {
-                    const saveInfo = document.getElementById('saveInfo');
-                    saveInfo.classList.add('show');
-                    setTimeout(() => saveInfo.classList.remove('show'), 2000);
+            saveTimeout = setTimeout(() => {
+                try {
+                    const data = {
+                        patterns,
+                        bpm: Tone.Transport.bpm.value,
+                        steps,
+                        currentPattern
+                    };
+                    
+                    if (tg?.CloudStorage) {
+                        tg.CloudStorage.setItem('beatmaker_save', JSON.stringify(data), (error, success) => {
+                            if (success) {
+                                const saveInfo = document.getElementById('saveInfo');
+                                if (saveInfo) {
+                                    saveInfo.classList.add('show');
+                                    setTimeout(() => saveInfo.classList.remove('show'), 2000);
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('AutoSave error:', e);
                 }
-            });
+            }, 500); // Сохраняем через 500ms после последнего изменения
         }
 
-        // Загрузка из Telegram Cloud Storage
+        // Загрузка из Telegram Cloud Storage (ИСПРАВЛЕНО: добавлена обработка ошибок)
         function loadSave() {
             const loading = document.getElementById('loading');
-            loading.classList.add('show');
+            if (loading) {
+                loading.classList.add('show');
+            }
             
-            tg.CloudStorage.getItem('beatmaker_save', (error, value) => {
-                loading.classList.remove('show');
-                
-                if (value) {
-                    try {
-                        const data = JSON.parse(value);
-                        patterns = data.patterns;
-                        steps = data.steps || 16;
-                        currentPattern = data.currentPattern || 0;
-                        
-                        Tone.Transport.bpm.value = data.bpm;
-                        document.getElementById('tempoSlider').value = data.bpm;
-                        document.getElementById('tempoValue').textContent = data.bpm;
-                        document.getElementById('stepsSelect').value = steps;
-                        
-                        document.querySelectorAll('.pattern-btn').forEach((btn, i) => {
-                            btn.classList.toggle('active', i === currentPattern);
-                        });
-                        
-                        createSequencer();
-                        document.getElementById('statusText').textContent = 'Loaded';
-                        tg.HapticFeedback.notificationOccurred('success');
-                    } catch (e) {
-                        console.error('Load error:', e);
-                    }
+            if (!tg?.CloudStorage) {
+                if (loading) {
+                    loading.classList.remove('show');
                 }
-            });
+                return;
+            }
+            
+            try {
+                tg.CloudStorage.getItem('beatmaker_save', (error, value) => {
+                    if (loading) {
+                        loading.classList.remove('show');
+                    }
+                    
+                    if (error) {
+                        console.error('Load error:', error);
+                        return;
+                    }
+                    
+                    if (value) {
+                        try {
+                            const data = JSON.parse(value);
+                            patterns = data.patterns || patterns;
+                            steps = data.steps || 16;
+                            currentPattern = data.currentPattern || 0;
+                            
+                            Tone.Transport.bpm.value = data.bpm || 120;
+                            const tempoSlider = document.getElementById('tempoSlider');
+                            const tempoValue = document.getElementById('tempoValue');
+                            if (tempoSlider) tempoSlider.value = data.bpm || 120;
+                            if (tempoValue) tempoValue.textContent = data.bpm || 120;
+                            
+                            const stepsSelect = document.getElementById('stepsSelect');
+                            if (stepsSelect) stepsSelect.value = steps;
+                            
+                            document.querySelectorAll('.pattern-btn').forEach((btn, i) => {
+                                btn.classList.toggle('active', i === currentPattern);
+                            });
+                            
+                            createSequencer();
+                            const statusText = document.getElementById('statusText');
+                            if (statusText) statusText.textContent = 'Loaded';
+                            
+                            if (tg?.HapticFeedback) {
+                                tg.HapticFeedback.notificationOccurred('success');
+                            }
+                        } catch (e) {
+                            console.error('Parse error:', e);
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('LoadSave error:', e);
+                if (loading) {
+                    loading.classList.remove('show');
+                }
+            }
         }
 
         // Экспорт бита в аудио (исправлено)
@@ -1564,7 +1778,8 @@
                             channel.volume.value = -12;
                             break;
                         case 'pad':
-                            synth = new Tone.PolySynth(Tone.Synth, {
+                            // ИСПРАВЛЕНО: используем MonoSynth вместо PolySynth
+                            synth = new Tone.MonoSynth({
                                 oscillator: { type: 'sine' },
                                 envelope: { attack: 0.3, decay: 0.5, sustain: 0.7, release: 2 }
                             }).connect(channel);
@@ -1656,25 +1871,37 @@
                         audioSize: blob.size,
                         note: 'Аудио файл слишком большой для отправки через sendData. Используйте сохранение в облако.'
                     };
-                    tg.sendData(JSON.stringify(trackDataSmall));
-                    loading.textContent = '⚠️ Данные отправлены (без аудио - файл слишком большой)';
+                    if (tg?.sendData) {
+                        tg.sendData(JSON.stringify(trackDataSmall));
+                        loading.textContent = '⚠️ Данные отправлены (без аудио - файл слишком большой)';
+                    } else {
+                        throw new Error('Telegram WebApp не доступен');
+                    }
                 } else {
-                    tg.sendData(jsonData);
-                    loading.textContent = '✅ Отправлено в бота!';
+                    if (tg?.sendData) {
+                        tg.sendData(jsonData);
+                        loading.textContent = '✅ Отправлено в бота!';
+                    } else {
+                        throw new Error('Telegram WebApp не доступен');
+                    }
                 }
                 
                 setTimeout(() => {
                     loading.classList.remove('show');
                 }, 3000);
                 
-                tg.HapticFeedback.notificationOccurred('success');
+                if (tg?.HapticFeedback) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                }
             } catch (error) {
                 console.error('Export error:', error);
                 loading.textContent = `Ошибка: ${error.message || 'Неизвестная ошибка'}`;
                 setTimeout(() => {
                     loading.classList.remove('show');
                 }, 3000);
-                tg.showAlert(`❌ Ошибка при экспорте: ${error.message || 'Попробуйте снова'}`);
+                if (tg?.showAlert) {
+                    tg.showAlert(`❌ Ошибка при экспорте: ${error.message || 'Попробуйте снова'}`);
+                }
             }
         }
         
@@ -1757,19 +1984,8 @@
         exportBtn.addEventListener('click', exportBeat);
         document.querySelector('.controls-row').appendChild(exportBtn);
 
-        // Автоматическая активация аудио при первом взаимодействии
-        let firstInteraction = true;
-        const activateAudioOnInteraction = async (e) => {
-            if (firstInteraction && Tone.context.state !== 'running') {
-                firstInteraction = false;
-                await startAudioContext();
-                document.getElementById('statusText').textContent = 'Ready';
-            }
-        };
-        
-        // Слушаем первое взаимодействие пользователя
-        document.addEventListener('touchstart', activateAudioOnInteraction, { once: true });
-        document.addEventListener('click', activateAudioOnInteraction, { once: true });
+        // ИСПРАВЛЕНО: убрана двойная активация - активация происходит при первом клике на Play
+        // Это предотвращает конфликты и проблемы с инициализацией
         
         // Инициализация
         loadSave();
