@@ -539,6 +539,20 @@
         ];
         let trackMutes = Array(tracks.length).fill(false);
         let trackSolos = Array(tracks.length).fill(false);
+        let audioContextStarted = false;
+
+        // Функция активации аудио контекста
+        async function startAudioContext() {
+            if (!audioContextStarted) {
+                try {
+                    await Tone.start();
+                    audioContextStarted = true;
+                    console.log('Audio context started');
+                } catch (e) {
+                    console.error('Failed to start audio context:', e);
+                }
+            }
+        }
 
         // Создание эффектов
         const reverb = new Tone.Reverb({ decay: 2, wet: 0 }).toDestination();
@@ -656,7 +670,8 @@
                 const muteBtn = document.createElement('button');
                 muteBtn.className = 'track-btn mute-btn';
                 muteBtn.textContent = 'M';
-                muteBtn.addEventListener('click', () => {
+                muteBtn.addEventListener('click', async () => {
+                    await startAudioContext();
                     trackMutes[trackIndex] = !trackMutes[trackIndex];
                     muteBtn.classList.toggle('active');
                     synths[trackIndex].channel.mute = trackMutes[trackIndex];
@@ -666,7 +681,8 @@
                 const soloBtn = document.createElement('button');
                 soloBtn.className = 'track-btn solo-btn';
                 soloBtn.textContent = 'S';
-                soloBtn.addEventListener('click', () => {
+                soloBtn.addEventListener('click', async () => {
+                    await startAudioContext();
                     trackSolos[trackIndex] = !trackSolos[trackIndex];
                     soloBtn.classList.toggle('active');
                     
@@ -699,7 +715,9 @@
                         stepEl.classList.add('active');
                     }
                     
-                    stepEl.addEventListener('click', () => {
+                    stepEl.addEventListener('click', async () => {
+                        await startAudioContext();
+                        
                         patterns[currentPattern][trackIndex][stepIndex] = !patterns[currentPattern][trackIndex][stepIndex];
                         stepEl.classList.toggle('active');
                         
@@ -760,7 +778,7 @@
 
         // Управление
         document.getElementById('playBtn').addEventListener('click', async () => {
-            await Tone.start();
+            await startAudioContext();
             
             if (isPlaying) {
                 Tone.Transport.pause();
@@ -779,7 +797,8 @@
             isPlaying = !isPlaying;
         });
 
-        document.getElementById('stopBtn').addEventListener('click', () => {
+        document.getElementById('stopBtn').addEventListener('click', async () => {
+            await startAudioContext();
             Tone.Transport.stop();
             currentStep = 0;
             isPlaying = false;
@@ -789,7 +808,8 @@
             tg.HapticFeedback.impactOccurred('light');
         });
 
-        document.getElementById('clearBtn').addEventListener('click', () => {
+        document.getElementById('clearBtn').addEventListener('click', async () => {
+            await startAudioContext();
             if (confirm('Очистить паттерн?')) {
                 patterns[currentPattern] = Array(tracks.length).fill(null).map(() => Array(32).fill(false));
                 createSequencer();
@@ -798,7 +818,8 @@
             }
         });
 
-        document.getElementById('randomBtn').addEventListener('click', () => {
+        document.getElementById('randomBtn').addEventListener('click', async () => {
+            await startAudioContext();
             tracks.forEach((track, trackIndex) => {
                 for (let i = 0; i < steps; i++) {
                     patterns[currentPattern][trackIndex][i] = Math.random() > 0.7;
@@ -823,24 +844,28 @@
         });
 
         // Эффекты
-        document.getElementById('reverbToggle').addEventListener('click', function() {
+        document.getElementById('reverbToggle').addEventListener('click', async function() {
+            await startAudioContext();
             this.classList.toggle('active');
             reverb.wet.value = this.classList.contains('active') ? 0.3 : 0;
             tg.HapticFeedback.impactOccurred('light');
         });
 
-        document.getElementById('delayToggle').addEventListener('click', function() {
+        document.getElementById('delayToggle').addEventListener('click', async function() {
+            await startAudioContext();
             this.classList.toggle('active');
             delay.wet.value = this.classList.contains('active') ? 0.3 : 0;
             tg.HapticFeedback.impactOccurred('light');
         });
 
-        document.getElementById('filterToggle').addEventListener('click', function() {
+        document.getElementById('filterToggle').addEventListener('click', async function() {
+            await startAudioContext();
             this.classList.toggle('active');
             tg.HapticFeedback.impactOccurred('light');
         });
 
-        document.getElementById('distortionToggle').addEventListener('click', function() {
+        document.getElementById('distortionToggle').addEventListener('click', async function() {
+            await startAudioContext();
             this.classList.toggle('active');
             distortion.wet.value = this.classList.contains('active') ? 0.5 : 0;
             tg.HapticFeedback.impactOccurred('light');
@@ -848,7 +873,8 @@
 
         // Паттерны
         document.querySelectorAll('.pattern-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
+                await startAudioContext();
                 document.querySelectorAll('.pattern-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 currentPattern = parseInt(btn.dataset.pattern);
@@ -924,7 +950,8 @@
         };
 
         document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
+                await startAudioContext();
                 const preset = presets[btn.dataset.preset];
                 document.getElementById('tempoSlider').value = preset.bpm;
                 Tone.Transport.bpm.value = preset.bpm;
