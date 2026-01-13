@@ -1467,20 +1467,23 @@
                                 const track = tracks[trackIndex];
                                 const synth = renderSynths[trackIndex];
                                 
-                                if (track.type === '808') {
-                                    synth.triggerAttackRelease(track.sound, '4n', time);
-                                } else if (track.type === 'drum') {
-                                    if (track.name === 'Snare' || track.name === 'Hi-Hat' || track.name === 'Open HH' || 
-                                        track.name === 'Clap' || track.name === 'Crash' || track.name === 'Ride' || 
-                                        track.name === 'Shaker' || track.name === 'Perc') {
-                                        synth.triggerAttackRelease('16n', time);
-                                    } else {
+                                switch(track.type) {
+                                    case 'kick':
+                                    case 'bass':
                                         synth.triggerAttackRelease(track.sound, '8n', time);
-                                    }
-                                } else if (track.type === 'synth' || track.type === 'piano') {
-                                    synth.triggerAttackRelease(track.sound, '8n', time);
-                                } else {
-                                    synth.triggerAttackRelease(track.sound, '8n', time);
+                                        break;
+                                    case 'snare':
+                                    case 'hihat':
+                                    case 'clap':
+                                    case 'perc':
+                                        synth.triggerAttackRelease('16n', time);
+                                        break;
+                                    case 'lead':
+                                        synth.triggerAttackRelease(track.sound, '16n', time);
+                                        break;
+                                    case 'pad':
+                                        synth.triggerAttackRelease([track.sound, Tone.Frequency(track.sound).transpose(7)], '2n', time);
+                                        break;
                                 }
                             }
                         });
