@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Beat Maker | Telegram WebApp</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #1e1e2e);
+            color: var(--tg-theme-text-color, #fff);
+            min-height: 100vh;
+            padding: 10px;
+            overflow-x: hidden;
+            touch-action: pan-y;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            background: linear-gradient(135deg, var(--tg-theme-button-color, #667eea) 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 80px;
+            padding: 12px;
+            font-size: 14px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            background: var(--tg-theme-button-color, #667eea);
+            color: var(--tg-theme-button-text-color, white);
+            touch-action: manipulation;
+        }
+
+        button:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--tg-theme-text-color, white);
+        }
+
+        .control-group {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .control-group h3 {
+            margin-bottom: 10px;
+            color: var(--tg-theme-button-color, #667eea);
+            font-size: 1em;
+        }
+
+        .slider-control {
+            margin-bottom: 12px;
+        }
+
+        .slider-control label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--tg-theme-hint-color, #aaa);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--tg-theme-button-color, #667eea);
+            cursor: pointer;
+        }
+
+        .presets {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .preset-btn {
+            padding: 8px 16px;
+            font-size: 13px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--tg-theme-text-color, white);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .preset-btn:active {
+            background: var(--tg-theme-button-color, #667eea);
+        }
+
+        .pattern-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+
+        .pattern-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: var(--tg-theme-text-color, white);
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .pattern-btn.active {
+            background: var(--tg-theme-button-color, #667eea);
+            border-color: var(--tg-theme-button-color, #667eea);
+        }
+
+        .sequencer {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 15px;
+        }
+
+        .track {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+        }
+
+        .track-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            min-width: 110px;
+            flex-shrink: 0;
+        }
+
+        .track-name {
+            font-weight: bold;
+            font-size: 13px;
+            min-width: 50px;
+        }
+
+        .track-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            padding: 0;
+            font-weight: bold;
+        }
+
+        .mute-btn {
+            background: rgba(245, 87, 108, 0.3);
+            color: #f5576c;
+        }
+
+        .mute-btn.active {
+            background: #f5576c;
+            color: white;
+        }
+
+        .solo-btn {
+            background: rgba(255, 193, 7, 0.3);
+            color: #ffc107;
+        }
+
+        .solo-btn.active {
+            background: #ffc107;
+            color: white;
+        }
+
+        .steps {
+            display: flex;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .step {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: rgba(255, 255, 255, 0.05);
+            touch-action: manipulation;
+        }
+
+        .step:active {
+            transform: scale(0.9);
+        }
+
+        .step.active {
+            background: var(--tg-theme-button-color, #667eea);
+            border-color: var(--tg-theme-button-color, #667eea);
+        }
+
+        .step.beat-marker {
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+
+        .step.playing {
+            box-shadow: 0 0 15px var(--tg-theme-button-color, rgba(102, 126, 234, 0.8));
+            transform: scale(1.1);
+        }
+
+        .effects-panel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .effect-module {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .effect-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .toggle-switch {
+            width: 44px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch.active {
+            background: var(--tg-theme-button-color, #667eea);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            top: 3px;
+            left: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-switch.active::after {
+            left: 23px;
+        }
+
+        .visualizer {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100px;
+            border-radius: 8px;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--tg-theme-text-color, white);
+            font-size: 14px;
+        }
+
+        .save-info {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            text-align: center;
+            display: none;
+        }
+
+        .save-info.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 15px;
+            color: white;
+            font-size: 16px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">Загрузка...</div>
+    <div class="save-info" id="saveInfo">✅ Сохранено!</div>
+
+    <div class="container">
+        <h1>🎵 Beat Maker</h1>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <span>👤</span>
+                <span id="userName">User</span>
+            </div>
+            <div class="status-item">
+                <span>⚡</span>
+                <span id="statusText">Ready</span>
+            </div>
+        </div>
+
+        <div class="controls-row">
+            <button id="playBtn">▶️ Play</button>
+            <button class="btn-secondary" id="stopBtn">⏹️ Stop</button>
+            <button class="btn-secondary" id="clearBtn">🗑️ Clear</button>
+            <button class="btn-secondary" id="randomBtn">🎲 Random</button>
+        </div>
+
+        <div class="control-group">
+            <div class="slider-control">
+                <label>
+                    <span>Темп (BPM)</span>
+                    <span id="tempoValue">120</span>
+                </label>
+                <input type="range" id="tempoSlider" min="60" max="200" value="120">
+            </div>
+            <div class="slider-control">
+                <label>
+                    <span>Swing</span>
+                    <span id="swingValue">0%</span>
+                </label>
+                <input type="range" id="swingSlider" min="0" max="100" value="0">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>🎼 Пресеты</h3>
+            <div class="presets">
+                <button class="preset-btn" data-preset="hiphop">Hip-Hop</button>
+                <button class="preset-btn" data-preset="techno">Techno</button>
+                <button class="preset-btn" data-preset="trap">Trap</button>
+                <button class="preset-btn" data-preset="house">House</button>
+                <button class="preset-btn" data-preset="dnb">D&B</button>
+            </div>
+        </div>
+
+        <div class="visualizer">
+            <canvas id="visualizer"></canvas>
+        </div>
+
+        <div class="control-group">
+            <h3>🎚️ Эффекты</h3>
+            <div class="effects-panel">
+                <div class="effect-module">
+                    <div class="effect-toggle">
+                        <div class="toggle-switch" id="reverbToggle"></div>
+                        <span>Reverb</span>
+                    </div>
+                </div>
+                <div class="effect-module">
+                    <div class="effect-toggle">
+                        <div class="toggle-switch" id="delayToggle"></div>
+                        <span>Delay</span>
+                    </div>
+                </div>
+                <div class="effect-module">
+                    <div class="effect-toggle">
+                        <div class="toggle-switch" id="filterToggle"></div>
+                        <span>Filter</span>
+                    </div>
+                </div>
+                <div class="effect-module">
+                    <div class="effect-toggle">
+                        <div class="toggle-switch" id="distortionToggle"></div>
+                        <span>Distortion</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>🎹 Секвенсор</h3>
+            
+            <div class="pattern-selector">
+                <button class="pattern-btn active" data-pattern="0">A</button>
+                <button class="pattern-btn" data-pattern="1">B</button>
+                <button class="pattern-btn" data-pattern="2">C</button>
+                <button class="pattern-btn" data-pattern="3">D</button>
+            </div>
+
+            <div class="slider-control">
+                <label>
+                    <span>Шаги</span>
+                    <span id="stepsValue">16</span>
+                </label>
+                <select id="stepsSelect">
+                    <option value="16">16 шагов</option>
+                    <option value="32">32 шага</option>
+                </select>
+            </div>
+
+            <div class="sequencer" id="sequencer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.enableClosingConfirmation();
+
+        // Установка темы
+        document.body.style.backgroundColor = tg.themeParams.bg_color || '#1e1e2e';
+
+        // Информация о пользователе
+        const user = tg.initDataUnsafe?.user;
+        if (user) {
+            document.getElementById('userName').textContent = user.first_name || 'User';
+        }
+
+        // Конфигурация треков
+        const tracks = [
+            { name: 'Kick', sound: 'C1', type: 'drum' },
+            { name: 'Snare', sound: 'D1', type: 'drum' },
+            { name: 'Hi-Hat', sound: 'F#1', type: 'drum' },
+            { name: 'Clap', sound: 'E1', type: 'drum' },
+            { name: 'Tom', sound: 'A1', type: 'drum' },
+            { name: 'Bass', sound: 'C2', type: 'bass' }
+        ];
+
+        let steps = 16;
+        let currentStep = 0;
+        let isPlaying = false;
+        let currentPattern = 0;
+        let patterns = [
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false)),
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false)),
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false)),
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false))
+        ];
+        let trackMutes = Array(tracks.length).fill(false);
+        let trackSolos = Array(tracks.length).fill(false);
+
+        // Создание эффектов
+        const reverb = new Tone.Reverb({ decay: 2, wet: 0 }).toDestination();
+        const delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 0 }).connect(reverb);
+        const filter = new Tone.Filter({ frequency: 1000, type: 'lowpass' }).connect(delay);
+        const distortion = new Tone.Distortion({ distortion: 0, wet: 0 }).connect(filter);
+        const compressor = new Tone.Compressor(-30, 3).connect(distortion);
+
+        // Создание синтезаторов
+        const synths = tracks.map((track, i) => {
+            const channel = new Tone.Channel({ volume: 0, pan: 0 }).connect(compressor);
+            let synth;
+
+            if (track.type === 'drum') {
+                if (i === 0) { // Kick
+                    synth = new Tone.MembraneSynth({
+                        pitchDecay: 0.05,
+                        octaves: 6,
+                        oscillator: { type: 'sine' },
+                        envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
+                    }).connect(channel);
+                } else if (i === 1) { // Snare
+                    synth = new Tone.NoiseSynth({
+                        noise: { type: 'white' },
+                        envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
+                    }).connect(channel);
+                } else if (i === 2) { // Hi-Hat
+                    synth = new Tone.MetalSynth({
+                        frequency: 200,
+                        envelope: { attack: 0.001, decay: 0.1, release: 0.01 },
+                        harmonicity: 5.1,
+                        modulationIndex: 32,
+                        resonance: 4000,
+                        octaves: 1.5
+                    }).connect(channel);
+                } else if (i === 3) { // Clap
+                    synth = new Tone.NoiseSynth({
+                        noise: { type: 'pink' },
+                        envelope: { attack: 0.005, decay: 0.15, sustain: 0 }
+                    }).connect(channel);
+                } else { // Tom
+                    synth = new Tone.MembraneSynth({
+                        pitchDecay: 0.08,
+                        octaves: 4,
+                        envelope: { attack: 0.001, decay: 0.3, sustain: 0 }
+                    }).connect(channel);
+                }
+            } else { // Bass
+                synth = new Tone.MonoSynth({
+                    oscillator: { type: 'sawtooth' },
+                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.5 },
+                    filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.5, baseFrequency: 200, octaves: 2.6 }
+                }).connect(channel);
+            }
+
+            return { synth, channel };
+        });
+
+        // Визуализация
+        const analyser = new Tone.Analyser('waveform', 512);
+        compressor.connect(analyser);
+
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth * 2;
+        canvas.height = 200;
+
+        function drawVisualizer() {
+            requestAnimationFrame(drawVisualizer);
+            const values = analyser.getValue();
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = tg.themeParams.button_color || '#667eea';
+            ctx.beginPath();
+            
+            const sliceWidth = canvas.width / values.length;
+            let x = 0;
+            
+            for (let i = 0; i < values.length; i++) {
+                const v = (values[i] + 1) / 2;
+                const y = v * canvas.height;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            ctx.stroke();
+        }
+        drawVisualizer();
+
+        // Создание секвенсора
+        function createSequencer() {
+            const sequencerEl = document.getElementById('sequencer');
+            sequencerEl.innerHTML = '';
+
+            tracks.forEach((track, trackIndex) => {
+                const trackEl = document.createElement('div');
+                trackEl.className = 'track';
+                
+                const controlsEl = document.createElement('div');
+                controlsEl.className = 'track-controls';
+                
+                const nameEl = document.createElement('div');
+                nameEl.className = 'track-name';
+                nameEl.textContent = track.name;
+                
+                const muteBtn = document.createElement('button');
+                muteBtn.className = 'track-btn mute-btn';
+                muteBtn.textContent = 'M';
+                muteBtn.addEventListener('click', () => {
+                    trackMutes[trackIndex] = !trackMutes[trackIndex];
+                    muteBtn.classList.toggle('active');
+                    synths[trackIndex].channel.mute = trackMutes[trackIndex];
+                    tg.HapticFeedback.impactOccurred('light');
+                });
+                
+                const soloBtn = document.createElement('button');
+                soloBtn.className = 'track-btn solo-btn';
+                soloBtn.textContent = 'S';
+                soloBtn.addEventListener('click', () => {
+                    trackSolos[trackIndex] = !trackSolos[trackIndex];
+                    soloBtn.classList.toggle('active');
+                    
+                    const anySolo = trackSolos.some(s => s);
+                    tracks.forEach((_, i) => {
+                        if (anySolo) {
+                            synths[i].channel.mute = !trackSolos[i];
+                        } else {
+                            synths[i].channel.mute = trackMutes[i];
+                        }
+                    });
+                    tg.HapticFeedback.impactOccurred('light');
+                });
+                
+                controlsEl.appendChild(nameEl);
+                controlsEl.appendChild(muteBtn);
+                controlsEl.appendChild(soloBtn);
+                
+                const stepsEl = document.createElement('div');
+                stepsEl.className = 'steps';
+                
+                for (let stepIndex = 0; stepIndex < steps; stepIndex++) {
+                    const stepEl = document.createElement('div');
+                    stepEl.className = 'step';
+                    if (stepIndex % 4 === 0) stepEl.classList.add('beat-marker');
+                    stepEl.dataset.track = trackIndex;
+                    stepEl.dataset.step = stepIndex;
+                    
+                    if (patterns[currentPattern][trackIndex][stepIndex]) {
+                        stepEl.classList.add('active');
+                    }
+                    
+                    stepEl.addEventListener('click', () => {
+                        patterns[currentPattern][trackIndex][stepIndex] = !patterns[currentPattern][trackIndex][stepIndex];
+                        stepEl.classList.toggle('active');
+                        
+                        if (patterns[currentPattern][trackIndex][stepIndex]) {
+                            triggerSound(trackIndex);
+                            tg.HapticFeedback.impactOccurred('medium');
+                        } else {
+                            tg.HapticFeedback.impactOccurred('light');
+                        }
+                        
+                        autoSave();
+                    });
+                    
+                    stepsEl.appendChild(stepEl);
+                }
+                
+                trackEl.appendChild(controlsEl);
+                trackEl.appendChild(stepsEl);
+                sequencerEl.appendChild(trackEl);
+            });
+        }
+
+        // Воспроизведение звука
+        function triggerSound(trackIndex) {
+            const track = tracks[trackIndex];
+            const { synth } = synths[trackIndex];
+            
+            if (track.type === 'drum') {
+                if (trackIndex === 1 || trackIndex === 2 || trackIndex === 3) {
+                    synth.triggerAttackRelease('16n');
+                } else {
+                    synth.triggerAttackRelease(track.sound, '8n');
+                }
+            } else {
+                synth.triggerAttackRelease(track.sound, '8n');
+            }
+        }
+
+        // Transport
+        Tone.Transport.bpm.value = 120;
+
+        const repeat = (time) => {
+            const stepElements = document.querySelectorAll(`[data-step="${currentStep}"]`);
+            
+            stepElements.forEach((el, trackIndex) => {
+                el.classList.add('playing');
+                setTimeout(() => el.classList.remove('playing'), 100);
+                
+                if (patterns[currentPattern][trackIndex][currentStep]) {
+                    triggerSound(trackIndex);
+                }
+            });
+            
+            currentStep = (currentStep + 1) % steps;
+        };
+
+        const loop = new Tone.Sequence(repeat, Array(32).fill(0).map((_, i) => i), '16n');
+
+        // Управление
+        document.getElementById('playBtn').addEventListener('click', async () => {
+            await Tone.start();
+            
+            if (isPlaying) {
+                Tone.Transport.pause();
+                document.getElementById('playBtn').textContent = '▶️ Play';
+                document.getElementById('statusText').textContent = 'Paused';
+                tg.HapticFeedback.impactOccurred('light');
+            } else {
+                if (Tone.Transport.state !== 'started') {
+                    loop.start(0);
+                    Tone.Transport.start();
+                }
+                document.getElementById('playBtn').textContent = '⏸️ Pause';
+                document.getElementById('statusText').textContent = 'Playing';
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+            isPlaying = !isPlaying;
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            Tone.Transport.stop();
+            currentStep = 0;
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = '▶️ Play';
+            document.getElementById('statusText').textContent = 'Stopped';
+            document.querySelectorAll('.step.playing').forEach(el => el.classList.remove('playing'));
+            tg.HapticFeedback.impactOccurred('light');
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            if (confirm('Очистить паттерн?')) {
+                patterns[currentPattern] = Array(tracks.length).fill(null).map(() => Array(32).fill(false));
+                createSequencer();
+                autoSave();
+                tg.HapticFeedback.notificationOccurred('warning');
+            }
+        });
+
+        document.getElementById('randomBtn').addEventListener('click', () => {
+            tracks.forEach((track, trackIndex) => {
+                for (let i = 0; i < steps; i++) {
+                    patterns[currentPattern][trackIndex][i] = Math.random() > 0.7;
+                }
+            });
+            createSequencer();
+            autoSave();
+            tg.HapticFeedback.notificationOccurred('success');
+        });
+
+        // Темп и Swing
+        document.getElementById('tempoSlider').addEventListener('input', (e) => {
+            const bpm = e.target.value;
+            Tone.Transport.bpm.value = bpm;
+            document.getElementById('tempoValue').textContent = bpm;
+        });
+
+        document.getElementById('swingSlider').addEventListener('input', (e) => {
+            const swing = e.target.value / 100;
+            Tone.Transport.swing = swing;
+            document.getElementById('swingValue').textContent = `${e.target.value}%`;
+        });
+
+        // Эффекты
+        document.getElementById('reverbToggle').addEventListener('click', function() {
+            this.classList.toggle('active');
+            reverb.wet.value = this.classList.contains('active') ? 0.3 : 0;
+            tg.HapticFeedback.impactOccurred('light');
+        });
+
+        document.getElementById('delayToggle').addEventListener('click', function() {
+            this.classList.toggle('active');
+            delay.wet.value = this.classList.contains('active') ? 0.3 : 0;
+            tg.HapticFeedback.impactOccurred('light');
+        });
+
+        document.getElementById('filterToggle').addEventListener('click', function() {
+            this.classList.toggle('active');
+            tg.HapticFeedback.impactOccurred('light');
+        });
+
+        document.getElementById('distortionToggle').addEventListener('click', function() {
+            this.classList.toggle('active');
+            distortion.wet.value = this.classList.contains('active') ? 0.5 : 0;
+            tg.HapticFeedback.impactOccurred('light');
+        });
+
+        // Паттерны
+        document.querySelectorAll('.pattern-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.pattern-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentPattern = parseInt(btn.dataset.pattern);
+                createSequencer();
+                tg.HapticFeedback.selectionChanged();
+            });
+        });
+
+        // Шаги
+        document.getElementById('stepsSelect').addEventListener('change', (e) => {
+            steps = parseInt(e.target.value);
+            document.getElementById('stepsValue').textContent = steps;
+            createSequencer();
+        });
+
+        // Пресеты
+        const presets = {
+            hiphop: {
+                bpm: 90,
+                pattern: [
+                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+                    [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0],
+                    [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
+                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                ]
+            },
+            techno: {
+                bpm: 130,
+                pattern: [
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+                    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0],
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]
+                ]
+            },
+            trap: {
+                bpm: 140,
+                pattern: [
+                    [1,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0],
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+                    [1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1],
+                    [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0],
+                    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0]
+                ]
+            },
+            house: {
+                bpm: 125,
+                pattern: [
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+                    [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0],
+                    [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0],
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]
+                ]
+            },
+            dnb: {
+                bpm: 174,
+                pattern: [
+                    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1],
+                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+                    [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0],
+                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                ]
+            }
+        };
+
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const preset = presets[btn.dataset.preset];
+                document.getElementById('tempoSlider').value = preset.bpm;
+                Tone.Transport.bpm.value = preset.bpm;
+                document.getElementById('tempoValue').textContent = preset.bpm;
+                
+                preset.pattern.forEach((pattern, trackIndex) => {
+                    pattern.forEach((active, stepIndex) => {
+                        patterns[currentPattern][trackIndex][stepIndex] = active === 1;
+                    });
+                });
+                
+                createSequencer();
+                autoSave();
+                tg.HapticFeedback.notificationOccurred('success');
+            });
+        });
+
+        // Автосохранение в Telegram Cloud Storage
+        function autoSave() {
+            const data = {
+                patterns,
+                bpm: Tone.Transport.bpm.value,
+                steps,
+                currentPattern
+            };
+            
+            tg.CloudStorage.setItem('beatmaker_save', JSON.stringify(data), (error, success) => {
+                if (success) {
+                    const saveInfo = document.getElementById('saveInfo');
+                    saveInfo.classList.add('show');
+                    setTimeout(() => saveInfo.classList.remove('show'), 2000);
+                }
+            });
+        }
+
+        // Загрузка из Telegram Cloud Storage
+        function loadSave() {
+            const loading = document.getElementById('loading');
+            loading.classList.add('show');
+            
+            tg.CloudStorage.getItem('beatmaker_save', (error, value) => {
+                loading.classList.remove('show');
+                
+                if (value) {
+                    try {
+                        const data = JSON.parse(value);
+                        patterns = data.patterns;
+                        steps = data.steps || 16;
+                        currentPattern = data.currentPattern || 0;
+                        
+                        Tone.Transport.bpm.value = data.bpm;
+                        document.getElementById('tempoSlider').value = data.bpm;
+                        document.getElementById('tempoValue').textContent = data.bpm;
+                        document.getElementById('stepsSelect').value = steps;
+                        
+                        document.querySelectorAll('.pattern-btn').forEach((btn, i) => {
+                            btn.classList.toggle('active', i === currentPattern);
+                        });
+                        
+                        createSequencer();
+                        document.getElementById('statusText').textContent = 'Loaded';
+                        tg.HapticFeedback.notificationOccurred('success');
+                    } catch (e) {
+                        console.error('Load error:', e);
+                    }
+                }
+            });
+        }
+
+        // Главная кнопка Telegram
+        tg.MainButton.setText('💾 Сохранить бит');
+        tg.MainButton.onClick(() => {
+            autoSave();
+            tg.showAlert('✅ Бит сохранён в облаке!');
+            tg.HapticFeedback.notificationOccurred('success');
+        });
+        tg.MainButton.show();
+
+        // Инициализация
+        loadSave();
+        createSequencer();
+
+        console.log('🎵 Telegram Beat Maker загружен!');
+    </script>
+</body>
+</html>
