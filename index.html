@@ -479,20 +479,14 @@
             <div class="modal-section">
                 <h3>🎹 Треки и звуки:</h3>
                 <ul>
-                    <li><strong>Kick</strong> - основной бас-барабан</li>
-                    <li><strong>808</strong> - низкий бас (808 басс)</li>
-                    <li><strong>Snare</strong> - малый барабан</li>
-                    <li><strong>Hi-Hat</strong> - закрытый хай-хэт</li>
-                    <li><strong>Open HH</strong> - открытый хай-хэт</li>
-                    <li><strong>Clap</strong> - хлопок</li>
-                    <li><strong>Crash</strong> - тарелка крэш</li>
-                    <li><strong>Ride</strong> - тарелка райд</li>
-                    <li><strong>Tom</strong> - том-том</li>
-                    <li><strong>Shaker</strong> - шейкер</li>
+                    <li><strong>Kick</strong> - мощный бас-барабан (808)</li>
+                    <li><strong>Snare</strong> - четкий малый барабан</li>
+                    <li><strong>Hi-Hat</strong> - яркий хай-хэт</li>
+                    <li><strong>Clap</strong> - сочный хлопок</li>
+                    <li><strong>Bass</strong> - жирный бас-синтезатор</li>
+                    <li><strong>Lead</strong> - яркий синтезатор-лид</li>
                     <li><strong>Perc</strong> - перкуссия</li>
-                    <li><strong>Bass</strong> - бас-синтезатор</li>
-                    <li><strong>Synth</strong> - синтезатор-лид</li>
-                    <li><strong>Piano</strong> - пианино</li>
+                    <li><strong>Pad</strong> - атмосферный пэд</li>
                 </ul>
             </div>
 
@@ -571,7 +565,7 @@
                     <li>Kick обычно на 1, 5, 9, 13 шагах (основа ритма)</li>
                     <li>Snare на 5 и 13 шагах (классический паттерн)</li>
                     <li>Hi-Hat каждые 2 шага = быстрый грув</li>
-                    <li>808 басс синхронизируй с Kick для мощного звука</li>
+                    <li>Bass синхронизируй с Kick для мощного звука</li>
                     <li>Используй Mute/Solo чтобы слышать отдельные треки</li>
                     <li>Меняй паттерны A/B/C/D для создания структуры</li>
                     <li>Экспериментируй с Swing для живого звука</li>
@@ -685,7 +679,6 @@
                 <select id="stepsSelect">
                     <option value="16">16 шагов</option>
                     <option value="32">32 шага</option>
-                    <option value="64">64 шага</option>
                 </select>
             </div>
 
@@ -729,22 +722,16 @@
             document.getElementById('userName').textContent = user.first_name || 'User';
         }
 
-        // Конфигурация треков
+        // УЛУЧШЕННЫЕ ЗВУКИ - 8 инструментов (оптимизировано)
         const tracks = [
-            { name: 'Kick', sound: 'C1', type: 'drum' },
-            { name: '808', sound: 'C0', type: '808' },
-            { name: 'Snare', sound: 'D1', type: 'drum' },
-            { name: 'Hi-Hat', sound: 'F#1', type: 'drum' },
-            { name: 'Open HH', sound: 'A#1', type: 'drum' },
-            { name: 'Clap', sound: 'E1', type: 'drum' },
-            { name: 'Crash', sound: 'C#2', type: 'drum' },
-            { name: 'Ride', sound: 'D#2', type: 'drum' },
-            { name: 'Tom', sound: 'A1', type: 'drum' },
-            { name: 'Shaker', sound: 'G1', type: 'drum' },
-            { name: 'Perc', sound: 'B1', type: 'drum' },
+            { name: 'Kick', sound: 'C1', type: 'kick' },
+            { name: 'Snare', sound: 'D1', type: 'snare' },
+            { name: 'Hi-Hat', sound: 'F#1', type: 'hihat' },
+            { name: 'Clap', sound: 'E1', type: 'clap' },
             { name: 'Bass', sound: 'C2', type: 'bass' },
-            { name: 'Synth', sound: 'C3', type: 'synth' },
-            { name: 'Piano', sound: 'C4', type: 'piano' }
+            { name: 'Lead', sound: 'C4', type: 'lead' },
+            { name: 'Perc', sound: 'G1', type: 'perc' },
+            { name: 'Pad', sound: 'E3', type: 'pad' }
         ];
 
         let steps = 16;
@@ -752,10 +739,10 @@
         let isPlaying = false;
         let currentPattern = 0;
         let patterns = [
-            Array(tracks.length).fill(null).map(() => Array(64).fill(false)),
-            Array(tracks.length).fill(null).map(() => Array(64).fill(false)),
-            Array(tracks.length).fill(null).map(() => Array(64).fill(false)),
-            Array(tracks.length).fill(null).map(() => Array(64).fill(false))
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false)),
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false)),
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false)),
+            Array(tracks.length).fill(null).map(() => Array(32).fill(false))
         ];
         let trackMutes = Array(tracks.length).fill(false);
         let trackSolos = Array(tracks.length).fill(false);
@@ -776,127 +763,134 @@
             }
         }
 
-        // Создание эффектов
+        // Эффекты
         const reverb = new Tone.Reverb({ decay: 2, wet: 0 }).toDestination();
-        const delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 0 }).connect(reverb);
-        const filter = new Tone.Filter({ frequency: 1000, type: 'lowpass' }).connect(delay);
-        const distortion = new Tone.Distortion({ distortion: 0, wet: 0 }).connect(filter);
-        const compressor = new Tone.Compressor(-30, 3).connect(distortion);
+        const compressor = new Tone.Compressor(-20, 3).connect(reverb);
 
-        // Создание синтезаторов
+        // КАЧЕСТВЕННЫЕ СИНТЕЗАТОРЫ
         const synths = tracks.map((track, i) => {
             const channel = new Tone.Channel({ volume: 0, pan: 0 }).connect(compressor);
             let synth;
 
-            if (track.type === '808') {
-                // 808 басс - очень низкий бас
-                synth = new Tone.MembraneSynth({
-                    pitchDecay: 0.08,
-                    octaves: 8,
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 0.001, decay: 0.6, sustain: 0.01, release: 2.0 }
-                }).connect(channel);
-            } else if (track.type === 'drum') {
-                if (track.name === 'Kick') {
+            switch(track.type) {
+                case 'kick':
+                    // Мощный 808 кик
                     synth = new Tone.MembraneSynth({
-                        pitchDecay: 0.05,
-                        octaves: 6,
+                        pitchDecay: 0.08,
+                        octaves: 10,
                         oscillator: { type: 'sine' },
-                        envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
+                        envelope: { 
+                            attack: 0.001, 
+                            decay: 0.6, 
+                            sustain: 0, 
+                            release: 0.8 
+                        }
                     }).connect(channel);
-                } else if (track.name === 'Snare') {
+                    channel.volume.value = 3; // Громче!
+                    break;
+
+                case 'snare':
+                    // Четкий снейр
                     synth = new Tone.NoiseSynth({
                         noise: { type: 'white' },
-                        envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
+                        envelope: { 
+                            attack: 0.002, 
+                            decay: 0.15, 
+                            sustain: 0,
+                            release: 0.1
+                        }
                     }).connect(channel);
-                } else if (track.name === 'Hi-Hat') {
-                    synth = new Tone.MetalSynth({
-                        frequency: 200,
-                        envelope: { attack: 0.001, decay: 0.1, release: 0.01 },
-                        harmonicity: 5.1,
-                        modulationIndex: 32,
-                        resonance: 4000,
-                        octaves: 1.5
-                    }).connect(channel);
-                } else if (track.name === 'Open HH') {
+                    channel.volume.value = -3;
+                    break;
+
+                case 'hihat':
+                    // Яркий хай-хэт
                     synth = new Tone.MetalSynth({
                         frequency: 300,
-                        envelope: { attack: 0.001, decay: 0.3, release: 0.2 },
-                        harmonicity: 5.1,
-                        modulationIndex: 32,
-                        resonance: 4000,
-                        octaves: 1.5
-                    }).connect(channel);
-                } else if (track.name === 'Clap') {
-                    synth = new Tone.NoiseSynth({
-                        noise: { type: 'pink' },
-                        envelope: { attack: 0.005, decay: 0.15, sustain: 0 }
-                    }).connect(channel);
-                } else if (track.name === 'Crash') {
-                    synth = new Tone.MetalSynth({
-                        frequency: 400,
-                        envelope: { attack: 0.001, decay: 0.5, release: 0.3 },
-                        harmonicity: 5.1,
+                        envelope: { attack: 0.001, decay: 0.08, release: 0.01 },
+                        harmonicity: 6,
                         modulationIndex: 40,
                         resonance: 5000,
                         octaves: 2
                     }).connect(channel);
-                } else if (track.name === 'Ride') {
-                    synth = new Tone.MetalSynth({
-                        frequency: 600,
-                        envelope: { attack: 0.001, decay: 0.4, release: 0.2 },
-                        harmonicity: 5.1,
-                        modulationIndex: 28,
-                        resonance: 3000,
-                        octaves: 1.5
-                    }).connect(channel);
-                } else if (track.name === 'Tom') {
-                    synth = new Tone.MembraneSynth({
-                        pitchDecay: 0.08,
-                        octaves: 4,
-                        envelope: { attack: 0.001, decay: 0.3, sustain: 0 }
-                    }).connect(channel);
-                } else if (track.name === 'Shaker') {
+                    channel.volume.value = -8;
+                    break;
+
+                case 'clap':
+                    // Сочный клэп
                     synth = new Tone.NoiseSynth({
-                        noise: { type: 'brown' },
-                        envelope: { attack: 0.001, decay: 0.2, sustain: 0 }
+                        noise: { type: 'pink' },
+                        envelope: { 
+                            attack: 0.003, 
+                            decay: 0.12, 
+                            sustain: 0.05,
+                            release: 0.08
+                        }
                     }).connect(channel);
-                } else if (track.name === 'Perc') {
-                    synth = new Tone.MembraneSynth({
-                        pitchDecay: 0.1,
-                        octaves: 3,
-                        envelope: { attack: 0.001, decay: 0.25, sustain: 0 }
+                    channel.volume.value = -5;
+                    break;
+
+                case 'bass':
+                    // ЖИРНЫЙ БАС
+                    synth = new Tone.MonoSynth({
+                        oscillator: { 
+                            type: 'sawtooth'
+                        },
+                        envelope: { 
+                            attack: 0.005, 
+                            decay: 0.3, 
+                            sustain: 0.4, 
+                            release: 0.8 
+                        },
+                        filterEnvelope: { 
+                            attack: 0.01, 
+                            decay: 0.2, 
+                            sustain: 0.6, 
+                            release: 0.8, 
+                            baseFrequency: 150, 
+                            octaves: 3,
+                            exponent: 2
+                        }
                     }).connect(channel);
-                } else {
-                    // Default drum
-                    synth = new Tone.MembraneSynth({
-                        pitchDecay: 0.05,
-                        octaves: 4,
-                        envelope: { attack: 0.001, decay: 0.3, sustain: 0 }
+                    channel.volume.value = -2;
+                    break;
+
+                case 'lead':
+                    // Яркий лид
+                    synth = new Tone.Synth({
+                        oscillator: { type: 'square' },
+                        envelope: { 
+                            attack: 0.02, 
+                            decay: 0.1, 
+                            sustain: 0.6, 
+                            release: 0.4 
+                        }
                     }).connect(channel);
-                }
-            } else if (track.type === 'bass') {
-                synth = new Tone.MonoSynth({
-                    oscillator: { type: 'sawtooth' },
-                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.5 },
-                    filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.5, baseFrequency: 200, octaves: 2.6 }
-                }).connect(channel);
-            } else if (track.type === 'synth') {
-                synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'sawtooth' },
-                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.3 }
-                }).connect(channel);
-            } else if (track.type === 'piano') {
-                synth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'triangle' },
-                    envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.4 }
-                }).connect(channel);
-            } else {
-                // Default
-                synth = new Tone.MonoSynth({
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.5 }
-                }).connect(channel);
+                    channel.volume.value = -10;
+                    break;
+
+                case 'perc':
+                    // Перкуссия
+                    synth = new Tone.MetalSynth({
+                        frequency: 250,
+                        envelope: { attack: 0.001, decay: 0.15, release: 0.05 }
+                    }).connect(channel);
+                    channel.volume.value = -12;
+                    break;
+
+                case 'pad':
+                    // Атмосферный пэд
+                    synth = new Tone.PolySynth(Tone.Synth, {
+                        oscillator: { type: 'sine' },
+                        envelope: { 
+                            attack: 0.3, 
+                            decay: 0.5, 
+                            sustain: 0.7, 
+                            release: 2 
+                        }
+                    }).connect(channel);
+                    channel.volume.value = -15;
+                    break;
             }
 
             return { synth, channel };
@@ -908,8 +902,10 @@
 
         const canvas = document.getElementById('visualizer');
         const ctx = canvas.getContext('2d');
-        canvas.width = canvas.offsetWidth * 2;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.offsetWidth * dpr;
         canvas.height = 200;
+        ctx.scale(dpr, dpr);
 
         function drawVisualizer() {
             requestAnimationFrame(drawVisualizer);
@@ -1036,21 +1032,23 @@
             const track = tracks[trackIndex];
             const { synth } = synths[trackIndex];
             
-            if (track.type === '808') {
-                synth.triggerAttackRelease(track.sound, '4n');
-            } else if (track.type === 'drum') {
-                if (track.name === 'Snare' || track.name === 'Hi-Hat' || track.name === 'Open HH' || 
-                    track.name === 'Clap' || track.name === 'Crash' || track.name === 'Ride' || 
-                    track.name === 'Shaker' || track.name === 'Perc') {
-                    synth.triggerAttackRelease('16n');
-                } else {
+            switch(track.type) {
+                case 'kick':
+                case 'bass':
                     synth.triggerAttackRelease(track.sound, '8n');
-                }
-            } else if (track.type === 'synth' || track.type === 'piano') {
-                // Полифонические синтезаторы
-                synth.triggerAttackRelease(track.sound, '8n');
-            } else {
-                synth.triggerAttackRelease(track.sound, '8n');
+                    break;
+                case 'snare':
+                case 'hihat':
+                case 'clap':
+                case 'perc':
+                    synth.triggerAttackRelease('16n');
+                    break;
+                case 'lead':
+                    synth.triggerAttackRelease(track.sound, '16n');
+                    break;
+                case 'pad':
+                    synth.triggerAttackRelease([track.sound, Tone.Frequency(track.sound).transpose(7)], '2n');
+                    break;
             }
         }
 
@@ -1072,7 +1070,7 @@
             currentStep = (currentStep + 1) % steps;
         };
 
-        const loop = new Tone.Sequence(repeat, Array(64).fill(0).map((_, i) => i), '16n');
+        const loop = new Tone.Sequence(repeat, Array(32).fill(0).map((_, i) => i), '16n');
 
         // Управление
         document.getElementById('playBtn').addEventListener('click', async () => {
@@ -1109,7 +1107,7 @@
         document.getElementById('clearBtn').addEventListener('click', async () => {
             await startAudioContext();
             if (confirm('Очистить паттерн?')) {
-                patterns[currentPattern] = Array(tracks.length).fill(null).map(() => Array(64).fill(false));
+                patterns[currentPattern] = Array(tracks.length).fill(null).map(() => Array(32).fill(false));
                 createSequencer();
                 autoSave();
                 tg.HapticFeedback.notificationOccurred('warning');
@@ -1118,11 +1116,64 @@
 
         document.getElementById('randomBtn').addEventListener('click', async () => {
             await startAudioContext();
+            
             tracks.forEach((track, trackIndex) => {
+                let probability, density;
+                
+                // Разная вероятность и плотность для каждого инструмента
+                switch(track.type) {
+                    case 'kick':
+                        probability = 0.4 + Math.random() * 0.2; // 40-60%
+                        density = [0, 4, 8, 12]; // На сильных долях
+                        break;
+                    case 'snare':
+                        probability = 0.7 + Math.random() * 0.1; // 70-80%
+                        density = [4, 12]; // На 2 и 4 доли
+                        break;
+                    case 'hihat':
+                        probability = 0.3 + Math.random() * 0.3; // 30-60%
+                        density = null; // Везде
+                        break;
+                    case 'clap':
+                        probability = 0.75 + Math.random() * 0.15; // 75-90%
+                        density = [4, 12]; // Как снейр
+                        break;
+                    case 'bass':
+                        probability = 0.5 + Math.random() * 0.2; // 50-70%
+                        density = [0, 2, 4, 6, 8, 10, 12, 14]; // Часто
+                        break;
+                    case 'lead':
+                        probability = 0.8 + Math.random() * 0.15; // 80-95%
+                        density = Math.random() > 0.5 ? [0, 2, 4, 6] : [1, 3, 5, 7]; // Разные ритмы
+                        break;
+                    case 'perc':
+                        probability = 0.85 + Math.random() * 0.1; // 85-95%
+                        density = null;
+                        break;
+                    case 'pad':
+                        probability = 0.9; // 10% только
+                        density = [0, 8]; // Редко, на сильных долях
+                        break;
+                }
+                
                 for (let i = 0; i < steps; i++) {
-                    patterns[currentPattern][trackIndex][i] = Math.random() > 0.7;
+                    if (density) {
+                        // Ставим на определенные доли
+                        if (density.includes(i) && Math.random() > probability) {
+                            patterns[currentPattern][trackIndex][i] = true;
+                        } else if (!density.includes(i) && Math.random() > 0.9) {
+                            // Иногда добавляем между ними
+                            patterns[currentPattern][trackIndex][i] = true;
+                        } else {
+                            patterns[currentPattern][trackIndex][i] = false;
+                        }
+                    } else {
+                        // Для всех шагов
+                        patterns[currentPattern][trackIndex][i] = Math.random() > probability;
+                    }
                 }
             });
+            
             createSequencer();
             autoSave();
             tg.HapticFeedback.notificationOccurred('success');
@@ -1170,7 +1221,6 @@
         document.getElementById('delayToggle').addEventListener('click', async function() {
             await startAudioContext();
             this.classList.toggle('active');
-            delay.wet.value = this.classList.contains('active') ? 0.3 : 0;
             tg.HapticFeedback.impactOccurred('light');
         });
 
@@ -1183,7 +1233,6 @@
         document.getElementById('distortionToggle').addEventListener('click', async function() {
             await startAudioContext();
             this.classList.toggle('active');
-            distortion.wet.value = this.classList.contains('active') ? 0.5 : 0;
             tg.HapticFeedback.impactOccurred('light');
         });
 
@@ -1206,158 +1255,110 @@
             createSequencer();
         });
 
-        // Пресеты
+        // ПОЛНОЦЕННЫЕ ПРЕСЕТЫ (используют ВСЕ 8 инструментов!)
         const presets = {
             hiphop: {
                 bpm: 90,
                 pattern: [
-                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // Kick
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // Hi-Hat
+                    [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0], // Clap
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], // Bass
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Lead (off)
+                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0], // Perc
+                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]  // Pad (редко)
                 ]
             },
             techno: {
                 bpm: 130,
                 pattern: [
-                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], // Kick
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+                    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // Hi-Hat (постоянно!)
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Clap
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], // Bass
+                    [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // Lead
+                    [0,0,1,0,0,0,0,1,0,0,1,0,0,0,0,1], // Perc
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]  // Pad (off)
                 ]
             },
             trap: {
                 bpm: 140,
                 pattern: [
-                    [1,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0], // Kick
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+                    [1,0,1,1,1,0,1,1,1,0,1,1,1,0,1,1], // Hi-Hat (trap hi-hats!)
+                    [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1], // Clap
+                    [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0], // Bass
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Lead
+                    [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0], // Perc
+                    [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0]  // Pad
                 ]
             },
             house: {
                 bpm: 125,
                 pattern: [
-                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], // Kick (четыре на полу!)
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Hi-Hat (оффбит)
+                    [0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0], // Clap
+                    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], // Bass
+                    [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1], // Lead
+                    [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0], // Perc
+                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0]  // Pad
                 ]
             },
             dnb: {
                 bpm: 174,
                 pattern: [
-                    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1],
-                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0], // Kick
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], // Snare (сложный ритм)
+                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // Hi-Hat
+                    [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0], // Clap
+                    [1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1], // Bass (быстрый!)
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Lead (off)
+                    [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0], // Perc
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]  // Pad (off)
                 ]
             },
             drill: {
                 bpm: 140,
                 pattern: [
-                    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],
-                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], // Kick
+                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Snare (808)
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Hi-Hat
+                    [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // Clap
+                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // Bass
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Lead (off)
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Perc
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]  // Pad (off)
                 ]
             },
             lofi: {
                 bpm: 85,
                 pattern: [
-                    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,1,0,0,1,0,0,0,1,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], // Kick (расслабленно)
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Hi-Hat
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Clap (off)
+                    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], // Bass
+                    [0,0,1,0,0,0,0,1,0,0,1,0,0,0,0,1], // Lead (мелодия)
+                    [0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0], // Perc
+                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0]  // Pad (атмосфера)
                 ]
             },
             phonk: {
                 bpm: 75,
                 pattern: [
-                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // Kick
+                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Snare (808)
+                    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Hi-Hat
+                    [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Clap
+                    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Bass (низкий)
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Lead (off)
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Perc
+                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]  // Pad (off)
                 ]
             }
         };
