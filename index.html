@@ -761,6 +761,10 @@
             } else if (!audioContextStarted) {
                 audioContextStarted = true;
             }
+            // Принудительная активация для мобильных
+            if (Tone.context.state === 'suspended') {
+                await Tone.context.resume();
+            }
         }
 
         // Эффекты
