@@ -170,7 +170,16 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Данные приходят через update.message.text (JSON строка)
     if update.message and update.message.text:
         try:
-            track_data = json.loads(update.message.text)
+            # Проверяем, что это JSON данные от WebApp
+            try:
+                track_data = json.loads(update.message.text)
+            except json.JSONDecodeError:
+                # Если это не JSON, возможно это обычное сообщение - игнорируем
+                return
+            
+            # Проверяем, что это данные от Beat Maker
+            if not isinstance(track_data, dict) or 'patterns' not in track_data:
+                return
             
             if user_id not in tracks_storage:
                 tracks_storage[user_id] = []
@@ -196,36 +205,61 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await update.message.reply_text(
+            # Формируем сообщение
+            message_text = (
                 f"✅ *Трек сохранён!*\n\n"
                 f"Название: {track['name']}\n"
                 f"BPM: {track['data']['bpm']}\n"
                 f"Паттерны: {len(track['data']['patterns'])}\n\n"
-                f"Используй кнопку 'Мои треки' чтобы прослушать все треки! 🎵",
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
             )
             
             # Если есть аудио, отправляем его сразу
+            audio_sent = False
             if track_data.get('audio'):
                 try:
                     audio_bytes = base64.b64decode(track_data['audio'])
-                    audio_file = io.BytesIO(audio_bytes)
-                    audio_file.name = f"{track['name']}.wav"
                     
-                    await update.message.reply_audio(
-                        audio=audio_file,
-                        title=track['name'],
-                        performer="Beat Maker"
-                    )
+                    # Проверяем размер файла (Telegram ограничение ~50MB)
+                    if len(audio_bytes) > 50 * 1024 * 1024:
+                        message_text += "⚠️ Аудио файл слишком большой для отправки.\n"
+                    else:
+                        audio_file = io.BytesIO(audio_bytes)
+                        audio_file.name = f"{track['name']}.wav"
+                        
+                        await update.message.reply_audio(
+                            audio=audio_file,
+                            title=track['name'],
+                            performer="Beat Maker"
+                        )
+                        audio_sent = True
+                        message_text += "🎵 Аудио файл отправлен!\n\n"
+                except base64.binascii.Error as e:
+                    print(f"Error decoding base64 audio: {e}")
+                    message_text += "⚠️ Ошибка декодирования аудио.\n\n"
                 except Exception as e:
                     print(f"Error sending audio: {e}")
+                    message_text += f"⚠️ Ошибка отправки аудио: {str(e)[:50]}\n\n"
+            elif track_data.get('note'):
+                message_text += f"ℹ️ {track_data.get('note')}\n\n"
+            else:
+                message_text += "ℹ️ Аудио файл не включён в экспорт.\n\n"
+            
+            message_text += "Используй кнопку 'Мои треки' чтобы прослушать все треки! 🎵"
+            
+            await update.message.reply_text(
+                message_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
                     
-        except json.JSONDecodeError:
-            await update.message.reply_text("❌ Ошибка при сохранении трека. Попробуйте снова.")
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            await update.message.reply_text("❌ Ошибка при сохранении трека. Неверный формат данных.")
         except Exception as e:
             print(f"Error saving track: {e}")
-            await update.message.reply_text("❌ Произошла ошибка. Попробуйте снова.")
+            import traceback
+            traceback.print_exc()
+            await update.message.reply_text(f"❌ Произошла ошибка: {str(e)[:100]}")
 
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -237,6 +271,7 @@ def main():
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="^back_to_start$"))
     
     # Обработчик данных из WebApp (приходят как текстовые сообщения с JSON)
+    # handle_webapp_data сам проверяет, что это данные от WebApp
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_webapp_data))
     
     print("Bot started!")
